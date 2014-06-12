@@ -124,6 +124,16 @@ it.
 
 让我们创建一个有名字的 Data Volume Container 来共享数据.
 
+    $ docker run -d -v /dbdata --name dbdata training/postgres
+
+这样做之后就可以通过 `--volumes-from` 把 `/dbdata` mount到其他的container里了
+
+    $ docker run -d --volumes-from dbdata --name db1 training/postgres
+
+还可以继续共享到另外一个container里
+
+    $ docker run -d --volumes-from dbdata --name db2 training/postgres
+
 Let's create a new named container with a volume to share.
 
     $ docker run -d -v /dbdata --name dbdata training/postgres
@@ -136,13 +146,28 @@ And another:
 
     $ docker run -d --volumes-from dbdata --name db2 training/postgres
 
+
+
+`-volumes-from` 可以多次使用来 mount 多个conatainer里的多个volumes。
+
+
 You can use multiple `-volumes-from` parameters to bring together multiple data
 volumes from multiple containers.
+
+
+这个操作是链式的， 我们在db1 中通过 `--volumes-from` mount进来的  volume可以继续被其他container使用
+
+    $ docker run -d --name db3 --volumes-from db1 training/postgres
+
+(译者: 这里我们不是直接使用 volume container， 而是使用db1 这个functional container 把volume 挂载到另外一个 funcational container上的，所谓的链式就是 dbdata -> db1 -> db3)
+
+如果你把所有mount volumes的container都移除掉， 包括初始化的那个 `dbdata` container， volume才会被移除掉。通过这个属性可以方便的升级升级数据或者在不同container间migrate数据.
 
 You can also extend the chain by mounting the volume that came from the
 `dbdata` container in yet another container via the `db1` or `db2` containers.
 
     $ docker run -d --name db3 --volumes-from db1 training/postgres
+
 
 If you remove containers that mount volumes, including the initial `dbdata`
 container, or the subsequent containers `db1` and `db2`, the volumes will not
@@ -150,6 +175,15 @@ be deleted until there are no containers still referencing those volumes. This
 allows you to upgrade, or effectively migrate data volumes between containers.
 
 ## Backup, restore, or migrate data volumes
+
+Volume的另外一个用处就是备份、恢复和migrate数据。 具体的做法如下，使用 `--volumes-from` 来创建一个新的container mount这个volume
+
+    $ sudo docker run --volumes-from dbdata -v $(pwd):/backup ubuntu tar cvf /backup/backup.tar /dbdata
+
+这里我们启动了一个新的container， 从 `dbdata` 挂载了一个volume。同时挂载了一个本地目录到这个container里。最后我们通过一个 `tar`命令把 `dbdata` 里的数据备份到了 `/backup` 里。命令结束并且停止这个container后我们就在本地得到了一个备份的数据.
+
+(译者: 这里使用的 `ubuntu` container， 就是为了把volume中的数据打包备份到host的某一个目录里。)
+
 
 Another useful function we can perform with volumes is use them for
 backups, restores or migrations.  We do this by using the
@@ -165,6 +199,17 @@ contents of the `dbdata` volume to a `backup.tar` file inside our
 `/backup` directory. When the command completes and the container stops
 we'll be left with a backup of our `dbdata` volume.
 
+
+备份的数据可以恢复到这个container， 或者其他使用这个volume的container。首先创建一个container
+
+    $ sudo docker run -v /dbdata --name dbdata2 ubuntu
+
+之后un-tar备份文件到 data volume 里
+
+    $ sudo docker run --volumes-from dbdata2 -v $(pwd):/backup busybox tar xvf /backup/backup.tar
+
+你可以使用你喜欢的工具加上上面的技术来自动备份，迁移和恢复数据.
+
 You could then to restore to the same container, or another that you've made
 elsewhere. Create a new container.
 
@@ -178,6 +223,8 @@ You can use this techniques above to automate backup, migration and
 restore testing using your preferred tools.
 
 # Next steps
+
+现在我们有多学了一些如何使用docker的知识。 下面我们将看下如何把Docker和[Docker Hub](https://hub.docker.com)提供的服务结合起来实现自动build，以及学习一些私有repository的知识.
 
 Now we've learned a bit more about how to use Docker we're going to see how to
 combine Docker with the services available on
