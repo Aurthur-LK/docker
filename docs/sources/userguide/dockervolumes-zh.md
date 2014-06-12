@@ -5,6 +5,7 @@ page_keywords: Examples, Usage, volume, docker, documentation, user guide, data,
 # Managing Data in Containers
 
 到目前我们介绍了一些[Docker的基础感念](/userguide/usingdocker/), 知道了如何[使用Docker的image](/userguide/dockerimages)， 也知道了[如何在多个container间通过网络通讯](/userguide/dockerlinks/). 在这章里我们将介绍如何在docker的container内管理数据以及如何在不同的container间共享数据。
+
 So far we've been introduced some [basic Docker
 concepts](/userguide/usingdocker/), seen how to work with [Docker
 images](/userguide/dockerimages/) as well as learned about [networking
@@ -25,7 +26,7 @@ Docker.
 
 ## Data volumes
 
-一个 *data volume* 就是一个在一个或者多个container里的特殊用途的目录。它绕过了 [*Union File System*](/terms/layer/#ufs-def) 为持久化数据、共享数据提供了下面这一些有用的特性：
+一个 *data volume* 就是一个在一个或者多个container里的特殊用途的目录。它绕过了 [*Union File System*](/terms/layer/#ufs-def) (译者： 这里不确定， 需要研究)为持久化数据、共享数据提供了下面这一些有用的特性：
 
 - Data volumes 可以在不同的container之间共享和重用数据
 - 对 Data volume 的修改及时生效（译者：data volumn是一个目录， 多个container都挂载这个目录， 具体的可以通过 docker inspect 看 volumne的信息)
@@ -49,6 +50,7 @@ persistent or shared data:
     $ sudo docker run -d -P --name web -v /webapp training/webapp python app.py
 
 这里一个新的volume会创建到container里的 `/webapp`. （译者：如果你通过ssh或者通过 `-i` 登陆到你的container的一个shell里， 使用 `ls /webapp` 可以验证挂载成功了)
+
 You can add a data volume to a container using the `-v` flag with the
 `docker run` command. You can use the `-v` multiple times in a single
 `docker run` to mount multiple data volumes. Let's mount a single volume
@@ -59,13 +61,23 @@ now in our web application container.
 This will create a new volume inside a container at `/webapp`.
 
 
-
+> **注意:**
+> 你也可以在`Dockerfile`里添加 `VOLUME` 字段，这样在创建一个新的image的
+> container是就会自动的创建新的volume.
 
 > **Note:** 
 > You can also use the `VOLUME` instruction in a `Dockerfile` to add one or
 > more new volumes to any container created from that image.
 
+
 ### Mount a Host Directory as a Data Volume
+
+使用 `-v` 不仅能创建一个新的 volume， 还可以把宿主机一个目录mount到container里。
+
+    $ sudo docker run -d -P --name web -v /src/webapp:/opt/webapp training/webapp python app.py
+
+这条命令会把本地目录 `/src/webapp` mount到container里的 `/opt/webapp` 目录上。用这个方法来测试程序非常方便， 比如我们可以把我们的源代码通过这个方法mount到container里， 修改本地代码后立即就可以看到修改后的代码是如何在container里工作的了。宿主机的目录必须是绝对路径， 如果这个目录不存在docker会为你自动创建。
+
 
 In addition to creating a volume using the `-v` flag you can also mount a
 directory from your own host into a container.
@@ -79,10 +91,19 @@ we change the source code. The directory on the host must be specified as an
 absolute path and if the directory doesn't exist Docker will automatically
 create it for you.
 
+> **注意**
+> 这里是没法用 `Dockerfile`实现的， 因为这样的用法有悖于可移植性和共享. 因为本地目录就像他名字告诉我们的， 是和本地相关的， 不一定可以在所有的宿主机上工作.(译者: 鬼知道你在使用image的时候的host是啥样子的）
+
 > **Note:** 
 > This is not available from a `Dockerfile` due the portability
 > and sharing purpose of it. As the host directory is, by its nature,
 > host-dependent it might not work all hosts.
+
+Docker默认设置volume是可读写的，但是我们也可以mount一个目录为只读:
+
+    $ sudo docker run -d -P --name web -v /src/webapp:/opt/webapp:ro training/webapp python app.py
+
+这里我们同样mount了 `/src/webapp` 目录， 但是我们加上了 `ro` 参数， 告诉docker这个volume是只读的.
 
 Docker defaults to a read-write volume but we can also mount a directory
 read-only.
@@ -94,10 +115,14 @@ option to specify that the mount should be read-only.
 
 ## Creating and mounting a Data Volume Container
 
+如果你有一些持久化的数据， 并且想在不同的container之间共享这些数据， 或者想在一些没有持久化的container中使用， 最好的方法就是使用 Data Volumn Container, 在把数据mount到你的container里.(译者：如开篇译者提到的docker的container是无状态的， 也就是说标记状态的数据，例如：数据库数据， 应用程序的log 等等， 是不应该放到container里的， 而是放到 Data Volume Container里, 这点和funcational programming很像， 所以我喜欢把一般的docker container 叫做 functional container用来区分 data volume container ）
+
 If you have some persistent data that you want to share between
 containers, or want to use from non-persistent containers, it's best to
 create a named Data Volume Container, and then to mount the data from
 it.
+
+让我们创建一个有名字的 Data Volume Container 来共享数据.
 
 Let's create a new named container with a volume to share.
 
